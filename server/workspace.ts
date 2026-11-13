@@ -3,11 +3,12 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 import { handleDemoRequest, HttpError, setDemoProvider } from '@/demo/server'
 import { supabaseAdmin } from './supabase'
+import { pushNewNotifications } from './push'
 
 // The prototype keeps its data as named lists. These are stored one record per row.
 export const COLLECTIONS = [
   'users', 'clients', 'projects', 'deliverables', 'workItems', 'approvalItems', 'approvalWorkflows',
-  'approvalHistory', 'capacities', 'targets', 'projectTasks', 'projectTaskUpdates', 'notifications',
+  'approvalHistory', 'capacities', 'targets', 'projectTasks', 'projectTaskUpdates', 'notifications', 'pushTokens',
 ] as const
 
 type Rec = Record<string, unknown> & { id: string }
@@ -143,6 +144,8 @@ export async function runAsUser(userId: string, req: ApiRequest, before?: (db: W
     const result = await als.run({ db, userId }, async () => handleDemoRequest(req))
     try {
       await commit(snap, db, version, counters)
+      // Saved: tell the browsers of anyone who just got a notification.
+      await pushNewNotifications(db.notifications.filter((n) => !snap.notifications.has(String(n.id))), db.pushTokens)
       return result === undefined ? {} : JSON.parse(JSON.stringify(result))
     } catch (e) {
       if (e instanceof Conflict) {

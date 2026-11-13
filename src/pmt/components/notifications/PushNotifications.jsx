@@ -3,8 +3,8 @@ import { toast } from "sonner";
 
 import { trackEvent } from "@/analytics";
 import { useUser } from "@/context/UserContext";
-import { IS_LIVE_PILOT, isDemoMode } from "@/demo/demoMode";
-import { isPushSupported } from "@/lib/firebase";
+import { isDemoMode } from "@/demo/demoMode";
+import { isFirebaseConfigured, isPushSupported } from "@/lib/firebase";
 import { PROMPT_DISMISSED_KEY, syncPushToken } from "@/lib/push";
 
 const PROMPT_TOAST_ID = "enable-push-notifications";
@@ -32,8 +32,9 @@ export default function PushNotifications() {
   const userId = currentUser?.id;
 
   useEffect(() => {
-    // The public demo never asks for notification permission.
-    if (!isAuthenticated || !userId || isDemoMode() || IS_LIVE_PILOT) return;
+    // The public demo never asks for notification permission, and nothing is
+    // asked until Firebase is set up for this site.
+    if (!isAuthenticated || !userId || isDemoMode() || !isFirebaseConfigured()) return;
 
     let cancelled = false;
 

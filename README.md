@@ -13,7 +13,9 @@ The medical product launch flow from the PMT prototype (`prototype/medical-launc
 3. First admin: `npm run seed:admin -- you@company.com "Full Name" "password"`, or create the user in Supabase Auth and add them to `ml_ws_records` as a `users` record. Everyone else: Team page.
 4. `npm install && npm run dev`, open http://localhost:3000.
 
-Not in the pilot: browser push notifications, email, file uploads (stages take Drive links), password-reset emails (an admin sets a new password from Team).
+Browser push (optional): set the `NEXT_PUBLIC_FIREBASE_*` variables and `FIREBASE_SERVICE_ACCOUNT` (see `.env.example`) and people are offered push notifications after signing in. Each browser's token is stored in `ml_ws_records` (`pushTokens`); after any save that creates a notification, the server sends a data-only push to that person's browsers, and `public/firebase-messaging-sw.js` shows it. Without the variables nothing changes: in-app notifications work as before.
+
+Not in the pilot: email, file uploads (stages take Drive links), password-reset emails (an admin sets a new password from Team).
 
 ## Checks
 

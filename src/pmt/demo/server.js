@@ -237,7 +237,8 @@ const nextStageOf = (deliverable) => {
   return at >= 0 && at < stages.length - 1 ? stages[at + 1] : null;
 };
 
-const notify = (userIds, title, message, deliverable) => {
+// `action`: what clicking it opens ("open_approvals" -> the Approvals page).
+const notify = (userIds, title, message, deliverable, action = null) => {
   const db_ = db();
   db_.notifications = db_.notifications || [];
   userIds.filter(Boolean).forEach((userId) => {
@@ -250,7 +251,7 @@ const notify = (userIds, title, message, deliverable) => {
       deliverable_id: deliverable?.id || null,
       project_id: deliverable?.project_id || null,
       read_at: null,
-      action_type: null,
+      action_type: action,
       created_at: nowIso(),
     });
   });
@@ -291,7 +292,7 @@ const openReview = (d) => {
       updated_at: nowIso(),
     });
   });
-  notify(managersOf(d.current_stage), `${d.current_stage} approval ready`, `${d.name} is waiting for your approval.`, d);
+  notify(managersOf(d.current_stage), `${d.current_stage} approval ready`, `${d.name} is waiting for your approval.`, d, "open_approvals");
 };
 
 // Anything sitting in "Ready for Review" without an open review gets one.
@@ -467,7 +468,7 @@ const approveItem = (id, note = "") => {
     waiting.requested_at = nowIso();
     waiting.updated_at = nowIso();
     if (waiting.approval_type === "LEADERSHIP" && d) {
-      notify(ceoIds(), "CEO approval needed", `${d.name} is waiting for your approval (${CEO_GATES[d.current_stage]?.title || d.current_stage}).`, d);
+      notify(ceoIds(), "CEO approval needed", `${d.name} is waiting for your approval (${CEO_GATES[d.current_stage]?.title || d.current_stage}).`, d, "open_approvals");
     }
   }
   if (siblings.every((i) => i.status === "APPROVED") && d) advanceDeliverable(d);
@@ -1544,7 +1545,8 @@ const ROUTES = [
           managersOf(d.current_stage).filter((id) => id !== me.id),
           `${d.current_stage} details changed`,
           `${me.name} changed ${labels} on ${d.name} while it waits for your approval.`,
-          d
+          d,
+          "open_approvals"
         );
       }
     }
@@ -1872,8 +1874,32 @@ const ROUTES = [
     return { ok: true };
   }),
   route("POST", "/notifications/:id/add-row", () => ({ ok: true })),
-  route("POST", "/push/register", () => ({ ok: true })),
-  route("POST", "/push/unregister", () => ({ ok: true })),
+  // Browser push tokens (Firebase). One browser = one token; a browser that
+  // switches accounts is re-assigned to the new person. The server sends to
+  // these after each save (server/push.ts).
+  route("POST", "/push/register", ({ body }) => {
+    const token = String(body?.token || "").trim();
+    if (!token || token.length > 4096) throw new HttpError(400, "A push token is required");
+    const me = actingUser();
+    const all = (db().pushTokens = db().pushTokens || []);
+    const existing = all.find((t) => t.token === token);
+    if (existing) {
+      existing.user_id = me.id;
+      existing.updated_at = nowIso();
+    } else {
+      all.push({ id: newId("pt"), token, user_id: me.id, platform: body?.platform || "web", created_at: nowIso(), updated_at: nowIso() });
+    }
+    // Keep each person's newest few browsers only.
+    const mine = all.filter((t) => t.user_id === me.id).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+    const drop = new Set(mine.slice(8).map((t) => t.id));
+    if (drop.size) db().pushTokens = all.filter((t) => !drop.has(t.id));
+    return { ok: true };
+  }),
+  route("POST", "/push/unregister", ({ body }) => {
+    const me = actingUser();
+    db().pushTokens = (db().pushTokens || []).filter((t) => !(t.token === body?.token && t.user_id === me.id));
+    return { ok: true };
+  }),
 ];
 
 // ---------------------------------------------------------------- entry point
