@@ -2,6 +2,7 @@
 // the server against Postgres, as each role. Run: npm run test:flow
 import assert from 'node:assert/strict'
 import { runAsUser } from '../server/workspace'
+import { setPushDeps } from '../server/push'
 import { query, end } from './fakeSupabase.mjs'
 
 const U = {
@@ -35,6 +36,26 @@ assert.equal(dels.length, 2)
 const lead = dels.find((d) => d.name === 'PX200 main unit')
 assert.equal(lead.current_stage, 'Sample')
 
+// push: browsers register a token; pushes go out after saves that notify someone
+const sent = []
+const removed = []
+setPushDeps({
+  enabled: () => true,
+  schedule: (job) => job(),
+  send: async (tokens, data) => { sent.push({ tokens, data }); return tokens.filter((t) => t === 'tok-dead') },
+  remove: async (tokens) => { removed.push(...tokens) },
+})
+await as('pm')('POST', '/push/register', { token: 'tok-pm' })
+await as('pm')('POST', '/push/register', { token: 'tok-dead' })
+await as('prm')('POST', '/push/register', { token: 'tok-prm' })
+await as('prm')('POST', '/push/register', { token: 'tok-shared' })
+await as('pmem')('POST', '/push/register', { token: 'tok-shared' }) // same browser, new account: moves to the new person
+await assert.rejects(as('pm')('POST', '/push/register', {}), (e) => e.status === 400)
+const tokenOwners = Object.fromEntries((await query(`select data->>'token' t, data->>'user_id' u from ml_ws_records where collection = 'pushTokens'`)).rows.map((r) => [r.t, r.u]))
+assert.equal(tokenOwners['tok-shared'], U.pmem[0])
+await as('prm')('POST', '/push/unregister', { token: 'tok-shared' }) // not theirs any more: untouched
+assert.equal((await query(`select count(*)::int n from ml_ws_records where collection = 'pushTokens' and data->>'token' = 'tok-shared'`)).rows[0].n, 1)
+
 // 2. stage work: other teams cannot touch it; the team cannot skip stages
 await denied(as('prmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief: 'x' } }))
 await denied(as('pmem')('PATCH', `/deliverables/${lead.id}`, { current_stage: 'Production' }))
@@ -42,6 +63,11 @@ await denied(as('pmem')('PATCH', `/deliverables/${lead.id}`, { stage_status: 'Co
 await as('pmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief: 'Fingertip SpO2 monitor' }, stage_status: 'Ready for Review' })
 // details stay editable while waiting; status and plan changes do not
 await as('pm')('GET', '/approvals/board') // opens the review
+const readySent = sent.find((x) => x.data.title === 'Sample approval ready')
+assert.ok(readySent, 'push sent when the approval opened')
+assert.deepEqual(readySent.tokens.sort(), ['tok-dead', 'tok-pm'], 'only the approver\'s browsers')
+assert.equal(readySent.data.url, `/#/approvals?deliverable=${lead.id}`)
+assert.ok(removed.includes('tok-dead'), 'dead token removed')
 await as('pmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief: 'Fingertip SpO2 monitor v2' } })
 await denied(as('pmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief: 'x' }, stage_status: 'In Progress', current_stage: 'Costing' }))
 await denied(as('prmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief: 'other team' } }))
@@ -61,6 +87,9 @@ await denied(as('prm')('POST', `/approval-items/${item.id}/approve`, {}))
 await as('pm')('POST', `/approval-items/${item.id}/approve`, { note: 'ok' })
 let d = (await as('pm')('GET', '/deliverables', {}, { project_id: launch.id })).find((x) => x.id === lead.id)
 assert.equal(d.current_stage, 'Sourcing')
+const handoff = sent.find((x) => /Sourcing has a new deliverable/.test(x.data.title))
+assert.ok(handoff && handoff.tokens.join() === 'tok-prm', 'next team pushed on approval')
+assert.match(handoff.data.url, /^\/#\/projects\//)
 const prmNotes = await as('prm')('GET', '/notifications')
 assert.ok(prmNotes.some((n) => /Sourcing/.test(n.title)), 'Procurement manager notified')
 assert.ok(!(await as('pmem')('GET', '/notifications')).some((n) => n.user_id !== U.pmem[0]), 'only own notifications')
