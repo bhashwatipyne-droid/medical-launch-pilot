@@ -33,7 +33,8 @@ export function CostCheck({ launch }) {
   );
 }
 
-export function LaunchFacts({ stage, launch = {}, title, stageOnly = false }) {
+// `action`: a control shown at the right of the heading; `note`: a line under it.
+export function LaunchFacts({ stage, launch = {}, title, stageOnly = false, action = null, note = null }) {
   const gate = stageOnly ? null : CEO_GATES[stage];
   const keys = gate ? GATE_FACTS[stage] : (STAGE_FIELDS[stage] || []).map((f) => f.key);
   if (!keys.length) return null;
@@ -41,7 +42,11 @@ export function LaunchFacts({ stage, launch = {}, title, stageOnly = false }) {
 
   return (
     <div className="flex flex-col gap-2.5" data-testid="launch-facts">
-      <span className="text-sm font-medium text-foreground">{heading}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-medium text-foreground">{heading}</span>
+        {action}
+      </div>
+      {note}
       <div className="grid grid-cols-1 gap-px overflow-hidden rounded-lg bg-[rgb(234,238,244)] shadow-[0_0_0_1px_rgb(234,238,244)] sm:grid-cols-2">
         {keys.map((key, i) => {
           const field = FIELD_BY_KEY[key];

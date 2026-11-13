@@ -39,15 +39,11 @@ export function ApprovalDetailsEditor({ item, canEdit, currentUserId, onSaved })
 
   if (!editing) {
     return (
-      <div className="flex flex-col gap-2.5">
-        <LaunchFacts stage={item.current_stage} launch={item.launch || {}} />
-        {edit && (
-          <p className="m-0 text-xs text-[rgb(84,100,144)]" data-testid="approval-last-edit">
-            Edited by {edit.by} · {fmtDayMonth(String(edit.at).slice(0, 10))}. {edit.what}
-          </p>
-        )}
-        {canEdit && fields.length > 0 && (
-          <div>
+      <LaunchFacts
+        stage={item.current_stage}
+        launch={item.launch || {}}
+        action={
+          canEdit && fields.length > 0 ? (
             <button
               type="button"
               data-testid="approval-edit-details"
@@ -60,9 +56,16 @@ export function ApprovalDetailsEditor({ item, canEdit, currentUserId, onSaved })
               <Pencil className="h-3.5 w-3.5" />
               Edit details
             </button>
-          </div>
-        )}
-      </div>
+          ) : null
+        }
+        note={
+          edit ? (
+            <p className="m-0 text-xs text-[rgb(84,100,144)]" data-testid="approval-last-edit">
+              Edited by {edit.by} · {fmtDayMonth(String(edit.at).slice(0, 10))}. {edit.what}
+            </p>
+          ) : null
+        }
+      />
     );
   }
 
