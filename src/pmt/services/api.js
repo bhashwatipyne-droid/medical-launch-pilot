@@ -1,0 +1,811 @@
+import axios from "axios";
+
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
+export const API = BACKEND_URL + "/api";
+
+axios.defaults.withCredentials = true;
+
+// Fallback for browsers that refuse the API's cross-site session cookie
+// (Chrome Incognito, Safari, Brave, ...). The API sets the cookie from a
+// different site than this app, so those browsers drop it and every request
+// after login would be 401. In that case only, the login token is kept here
+// and sent as a Bearer header, which the backend also accepts.
+const TOKEN_KEY = "pmt_access_token";
+
+export const setAuthToken = (token) => {
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+  } catch (_) {}
+  axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+};
+
+export const clearAuthToken = () => {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch (_) {}
+  delete axios.defaults.headers.common.Authorization;
+};
+
+try {
+  const storedToken = localStorage.getItem(TOKEN_KEY);
+  if (storedToken) {
+    axios.defaults.headers.common.Authorization = `Bearer ${storedToken}`;
+  }
+} catch (_) {}
+
+const authHeaders = () => ({});
+
+const serializeQueryParams = (params = {}) => {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item !== undefined && item !== null && item !== "") {
+          searchParams.append(key, item);
+        }
+      });
+
+      return;
+    }
+
+    searchParams.append(key, value);
+  });
+
+  return searchParams.toString();
+};
+
+export const getUsers = () => axios.get(`${API}/users`).then((r) => r.data);
+
+export const loginUser = (login, password) =>
+  axios
+    .post(`${API}/auth/login`, { login, password })
+    .then((r) => r.data);
+
+export const logoutUser = () =>
+  axios.post(`${API}/auth/logout`, {}).then((r) => r.data);
+
+// Forgot / reset password (no sign-in needed).
+export const requestPasswordReset = (login) =>
+  axios.post(`${API}/auth/forgot-password`, { login }).then((r) => r.data);
+
+export const resetPassword = (token, newPassword) =>
+  axios
+    .post(`${API}/auth/reset-password`, { token, new_password: newPassword })
+    .then((r) => r.data);
+
+export const getMe = () =>
+  axios.get(`${API}/auth/me`).then((r) => r.data);
+
+// -------- Profile --------
+export const updateProfile = (payload) =>
+  axios.patch(`${API}/auth/profile`, payload).then((r) => r.data);
+
+export const getOptions = () =>
+  axios.get(`${API}/config/options`).then((r) => r.data);
+
+// -------- Work items --------
+export const getWorkItems = (userId, params = {}) =>
+  axios
+    .get(`${API}/work-items`, {
+      headers: authHeaders(userId),
+      params,
+      paramsSerializer: serializeQueryParams,
+    })
+    .then((r) => r.data);
+
+export const getWorkItemsPendingCount = (userId) =>
+  axios
+    .get(`${API}/work-items/pending-count`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const createWorkItem = (userId, payload) =>
+  axios
+    .post(`${API}/work-items`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const updateWorkItem = (userId, id, payload) =>
+  axios
+    .patch(`${API}/work-items/${id}`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const deleteWorkItem = (userId, id) =>
+  axios
+    .delete(`${API}/work-items/${id}`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const bulkCreateWorkItems = (userId, count, template) =>
+  axios
+    .post(
+      `${API}/work-items/bulk-create`,
+      { count, template },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const bulkUpdateWorkItems = (userId, ids, patch) =>
+  axios
+    .post(
+      `${API}/work-items/bulk-update`,
+      { ids, patch },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+// Tag teammates on entries. Each tagged person gets their own row; anyone who
+// already has that entry is skipped, so repeating the call adds nothing.
+// -> { created: [rows], updated_sources: [rows], skipped: [{id, creator_id, reason}],
+//      row_errors: [{id, reason}] }
+export const addWorkItemCollaborators = (userId, ids, creatorIds) =>
+  axios
+    .post(
+      `${API}/work-items/collaborators`,
+      { ids, creator_ids: creatorIds },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const bulkDeleteWorkItems = (userId, ids) =>
+  axios
+    .post(
+      `${API}/work-items/bulk-delete`,
+      { ids },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+// -------- Dashboard --------
+export const getDashboardSummary = (userId) =>
+  axios
+    .get(`${API}/dashboard/summary`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const getDashboardTeamSummary = (userId) =>
+  axios
+    .get(`${API}/dashboard/team-summary`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const getDashboardAttentionItems = (userId) =>
+  axios
+    .get(`${API}/dashboard/attention-items`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+// -------- Clients --------
+export const getClients = () =>
+  axios.get(`${API}/clients`).then((r) => r.data);
+
+// One call for the Work Sheet's Client / Project / Deliverable dropdowns:
+// { clients: [{id, name}], projects: [{id, name, client_id}],
+//   deliverables: [{id, name, project_id}] }
+export const getWorksheetLookups = () =>
+  axios.get(`${API}/worksheet/lookups`).then((r) => r.data);
+
+// { [project_id]: ["lowercase deliverable name", ...] } - uncapped, used by the
+// Projects page search to find a project by one of its deliverables.
+export const getDeliverableNamesByProject = () =>
+  axios.get(`${API}/worksheet/deliverable-names`).then((r) => r.data);
+
+export const createClient = (userId, payload) =>
+  axios
+    .post(`${API}/clients`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const updateClient = (userId, id, payload) =>
+  axios
+    .patch(`${API}/clients/${id}`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const deleteClient = (userId, id) =>
+  axios
+    .delete(`${API}/clients/${id}`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const createContact = (userId, clientId, payload) =>
+  axios
+    .post(`${API}/clients/${clientId}/contacts`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const updateContact = (userId, clientId, contactId, payload) =>
+  axios
+    .patch(
+      `${API}/clients/${clientId}/contacts/${contactId}`,
+      payload,
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const deleteContact = (userId, clientId, contactId) =>
+  axios
+    .delete(`${API}/clients/${clientId}/contacts/${contactId}`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+// -------- Projects --------
+export const getProjects = (userId, params) =>
+  axios
+    .get(`${API}/projects`, {
+      headers: authHeaders(userId),
+      params,
+    })
+    .then((r) => r.data);
+
+export const getProjectWorkLog = (userId, id) =>
+  axios
+    .get(`${API}/projects/${id}/work-log`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const getProjectMetrics = (userId) =>
+  axios
+    .get(`${API}/projects/metrics`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const getProject = (userId, id) =>
+  axios
+    .get(`${API}/projects/${id}`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const createProject = (userId, payload) =>
+  axios
+    .post(`${API}/projects`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+// Projects for this client with the same name, created or changed in the last
+// 30 days. Only informs; creating a project never waits on it.
+export const checkProjectDuplicates = (userId, clientId, name) =>
+  axios
+    .get(`${API}/projects/duplicate-check`, {
+      headers: authHeaders(userId),
+      params: { client_id: clientId, name },
+    })
+    .then((r) => r.data);
+
+export const updateProject = (userId, id, payload) =>
+  axios
+    .patch(`${API}/projects/${id}`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const deleteProject = (userId, id) =>
+  axios
+    .delete(`${API}/projects/${id}`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const hideProject = (userId, id) =>
+  axios
+    .post(
+      `${API}/projects/${id}/hide`,
+      {},
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const unhideProject = (userId, id) =>
+  axios
+    .post(
+      `${API}/projects/${id}/unhide`,
+      {},
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const bulkHideProjects = (userId, projectIds) =>
+  axios
+    .post(
+      `${API}/projects/bulk-hide`,
+      { project_ids: projectIds },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const bulkUnhideProjects = (userId, projectIds) =>
+  axios
+    .post(
+      `${API}/projects/bulk-unhide`,
+      { project_ids: projectIds },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const bulkUpdateProjectStatus = (userId, projectIds, status) =>
+  axios
+    .post(
+      `${API}/projects/bulk-status`,
+      {
+        project_ids: projectIds,
+        status,
+      },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const bulkDeleteProjects = (userId, projectIds) =>
+  axios
+    .post(
+      `${API}/projects/bulk-delete`,
+      { project_ids: projectIds },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const reorderProjects = (userId, projectId, targetStatus, targetIndex) =>
+  axios
+    .post(
+      `${API}/projects/reorder`,
+      {
+        project_id: projectId,
+        target_status: targetStatus,
+        target_index: targetIndex,
+      },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+// -------- Notifications --------
+export const getNotifications = (userId) =>
+  axios
+    .get(`${API}/notifications`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const markNotificationRead = (userId, notificationId) =>
+  axios
+    .post(
+      `${API}/notifications/${notificationId}/read`,
+      {},
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const markAllNotificationsRead = (userId) =>
+  axios
+    .post(
+      `${API}/notifications/read-all`,
+      {},
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const addWorkRowFromNotification = (userId, notificationId) =>
+  axios
+    .post(
+      `${API}/notifications/${notificationId}/add-row`,
+      {},
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+// -------- Push notifications (Firebase Cloud Messaging) --------
+export const registerPushToken = (token) =>
+  axios
+    .post(`${API}/push/register`, { token, platform: "web" })
+    .then((r) => r.data);
+
+export const unregisterPushToken = (token) =>
+  axios.post(`${API}/push/unregister`, { token }).then((r) => r.data);
+
+// -------- Deliverables --------
+export const getDeliverables = (userId, params) =>
+  axios
+    .get(`${API}/deliverables`, {
+      headers: authHeaders(userId),
+      params,
+    })
+    .then((r) => r.data);
+
+export const createDeliverable = (userId, payload) =>
+  axios
+    .post(`${API}/deliverables`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const updateDeliverable = (userId, id, payload) =>
+  axios
+    .patch(`${API}/deliverables/${id}`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const deleteDeliverable = (userId, id) =>
+  axios
+    .delete(`${API}/deliverables/${id}`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+// -------- Team / Users --------
+export const createUser = (userId, payload) =>
+  axios
+    .post(`${API}/users`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const deleteUser = (userId, id) =>
+  axios
+    .delete(`${API}/users/${id}`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const updateUser = (userId, id, payload) =>
+  axios
+    .patch(`${API}/users/${id}`, payload, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+// -------- Approvals --------
+export const getApprovals = (userId) =>
+  axios
+    .get(`${API}/approvals`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const getApprovalsPendingCount = (userId) =>
+  axios
+    .get(`${API}/approvals/pending-count`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const getApprovalBoard = (userId, params = {}) =>
+  axios
+    .get(`${API}/approvals/board`, {
+      headers: authHeaders(userId),
+      params,
+    })
+    .then((r) => r.data);
+
+export const getDeliverableApprovals = (userId, deliverableId) =>
+  axios
+    .get(`${API}/deliverables/${deliverableId}/approvals`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const configureApprovalWorkflow = (
+  userId,
+  deliverableId,
+  approvalTypes
+) =>
+  axios
+    .put(
+      `${API}/deliverables/${deliverableId}/approval-workflow`,
+      { approval_types: approvalTypes },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const approveApprovalItem = (
+  userId,
+  approvalItemId,
+  note = ""
+) =>
+  axios
+    .post(
+      `${API}/approval-items/${approvalItemId}/approve`,
+      { note },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+// PROTOTYPE: reject a stage and send the product back to an earlier stage.
+// Answered by the in-browser demo server only; the real backend has no such route yet.
+export const sendBackApprovalItem = (userId, approvalItemId, toStage, note) =>
+  axios
+    .post(
+      `${API}/approval-items/${approvalItemId}/send-back`,
+      { to_stage: toStage, note },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const bulkApproveApprovalItems = (userId, ids, note = "") =>
+  axios
+    .post(
+      `${API}/approval-items/bulk-approve`,
+      { ids, note },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const moveApprovalItem = (
+  userId,
+  approvalItemId,
+  approvalType
+) =>
+  axios
+    .patch(
+      `${API}/approval-items/${approvalItemId}/move`,
+      { approval_type: approvalType },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const hideApprovalItem = (userId, approvalItemId) =>
+  axios
+    .post(
+      `${API}/approval-items/${approvalItemId}/hide`,
+      {},
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const unhideApprovalItem = (userId, approvalItemId) =>
+  axios
+    .post(
+      `${API}/approval-items/${approvalItemId}/unhide`,
+      {},
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const bulkHideApprovalItems = (userId, approvalItemIds) =>
+  axios
+    .post(
+      `${API}/approval-items/bulk-hide`,
+      { approval_item_ids: approvalItemIds },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const bulkUnhideApprovalItems = (userId, approvalItemIds) =>
+  axios
+    .post(
+      `${API}/approval-items/bulk-unhide`,
+      { approval_item_ids: approvalItemIds },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const getBulkReviewCount = (userId) =>
+  axios
+    .get(`${API}/bulk-review/count`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const getBulkReview = (userId) =>
+  axios
+    .get(`${API}/bulk-review`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const getWorkItemHistory = (stage) =>
+  axios
+    .get(`${API}/work-items/history`, {
+      params: { stage },
+    })
+    .then((r) => r.data);
+
+export const reviewWorkItem = (
+  itemId,
+  action,
+  userId,
+  note = ""
+) =>
+  axios
+    .post(`${API}/work-items/${itemId}/review`, null, {
+      params: {
+        action,
+        note,
+      },
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+export const approveDeliverable = (userId, id, note = "") =>
+  axios
+    .post(
+      `${API}/deliverables/${id}/approve`,
+      { note },
+      { headers: authHeaders(userId) }
+    )
+    .then((r) => r.data);
+
+export const getDashboardOverview = (userId) =>
+  axios
+    .get(`${API}/dashboard/overview`, {
+      headers: authHeaders(userId),
+    })
+    .then((r) => r.data);
+
+// Everything the Home page needs for one month (see backend/home_dashboard.py).
+export const getDashboardHome = (month) =>
+  axios.get(`${API}/dashboard/home`, { params: { month } }).then((r) => r.data);
+
+// Home > Team activity tab: who logged what today / this week. Fetched only when
+// that tab is opened (see backend/home_dashboard.py).
+export const getTeamActivity = () =>
+  axios.get(`${API}/dashboard/team-activity`).then((r) => r.data);
+
+// -------- Efficiency --------
+export const getEfficiencyOverview = (month) =>
+  axios.get(`${API}/efficiency/overview`, { params: { month } }).then((r) => r.data);
+
+export const getEmployeeEfficiency = (employeeId, month) =>
+  axios
+    .get(`${API}/efficiency/employee/${employeeId}`, { params: { month } })
+    .then((r) => r.data);
+
+export const getEfficiencyActivityBreakdown = (month) =>
+  axios.get(`${API}/efficiency/activity-breakdown`, { params: { month } }).then((r) => r.data);
+
+export const getEfficiencyTrend = (month, months = 6) =>
+  axios.get(`${API}/efficiency/trend`, { params: { month, months } }).then((r) => r.data);
+
+export const getMonthlyCapacityList = (params = {}) =>
+  axios.get(`${API}/efficiency/monthly-capacity`, { params }).then((r) => r.data);
+
+export const getMonthlyCapacity = (userId, month) =>
+  axios.get(`${API}/efficiency/monthly-capacity/${userId}/${month}`).then((r) => r.data);
+
+export const saveMonthlyCapacity = (payload) =>
+  axios.post(`${API}/efficiency/monthly-capacity`, payload).then((r) => r.data);
+
+export const updateMonthlyCapacity = (id, payload) =>
+  axios.put(`${API}/efficiency/monthly-capacity/${id}`, payload).then((r) => r.data);
+
+export const deleteMonthlyCapacity = (id) =>
+  axios.delete(`${API}/efficiency/monthly-capacity/${id}`).then((r) => r.data);
+
+export const getActivityCatalog = () =>
+  axios.get(`${API}/efficiency/activity-catalog`).then((r) => r.data);
+
+export const getEmployeeTargets = (userId, month) =>
+  axios
+    .get(`${API}/efficiency/employee-targets`, { params: { user_id: userId, month } })
+    .then((r) => r.data);
+
+export const upsertEmployeeTarget = (payload) =>
+  axios.post(`${API}/efficiency/employee-targets`, payload).then((r) => r.data);
+
+export const updateEmployeeTarget = (id, payload) =>
+  axios.put(`${API}/efficiency/employee-targets/${id}`, payload).then((r) => r.data);
+
+export const deleteEmployeeTarget = (userId, activityName) =>
+  axios
+    .delete(`${API}/efficiency/employee-targets`, {
+      params: { user_id: userId, activity_name: activityName },
+    })
+    .then((r) => r.data);
+
+// -------- Work Sheet time defaults --------
+// Minutes-per-unit the employee has set for each Core activity: what the
+// Work Sheet pre-fills as "time taken" when that deliverable type is chosen.
+export const getTimeDefaults = (userId) =>
+  axios
+    .get(`${API}/efficiency/time-defaults`, {
+      params: userId ? { user_id: userId } : undefined,
+    })
+    .then((r) => r.data);
+
+// -------- Bulk deliverable import (admin) --------
+// dryRun=true only checks the file and returns a row-by-row report.
+export const importDeliverables = (projectId, file, dryRun = true) => {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("dry_run", dryRun ? "true" : "false");
+  return axios
+    .post(`${API}/projects/${projectId}/deliverables/import`, form)
+    .then((r) => r.data);
+};
+
+// -------- Invoicing (HR / Finance) --------
+export const getInvoiceProjects = (tab = "ready") =>
+  axios.get(`${API}/invoicing/projects`, { params: { tab } }).then((r) => r.data);
+
+export const getInvoiceProject = (id) =>
+  axios.get(`${API}/invoicing/projects/${id}`).then((r) => r.data);
+
+export const editInvoiceLine = (projectId, workItemId, patch) =>
+  axios
+    .put(`${API}/invoicing/projects/${projectId}/lines/${workItemId}`, patch)
+    .then((r) => r.data);
+
+// invoiceNumber is optional; when given it is saved with the raise.
+export const raiseInvoice = (id, invoiceNumber) =>
+  axios
+    .post(
+      `${API}/invoicing/projects/${id}/raise`,
+      invoiceNumber === undefined ? undefined : { invoice_number: invoiceNumber }
+    )
+    .then((r) => r.data);
+
+export const setInvoiceNumber = (id, invoiceNumber) =>
+  axios
+    .put(`${API}/invoicing/projects/${id}/invoice-number`, { invoice_number: invoiceNumber })
+    .then((r) => r.data);
+
+export const undoRaiseInvoice = (id) =>
+  axios.post(`${API}/invoicing/projects/${id}/undo`).then((r) => r.data);
+
+// ---------------- Share a project as a link (WhatsApp preview) ----------------
+
+export const getProjectShare = (userId, id) =>
+  axios
+    .get(`${API}/projects/${id}/share`, { headers: authHeaders(userId) })
+    .then((r) => r.data);
+
+export const startProjectShare = (userId, id) =>
+  axios
+    // The link opens in this app, so the server is told where it lives.
+    .post(`${API}/projects/${id}/share`, { app_url: window.location.origin }, { headers: authHeaders(userId) })
+    .then((r) => r.data);
+
+export const stopProjectShare = (userId, id) =>
+  axios
+    .delete(`${API}/projects/${id}/share`, { headers: authHeaders(userId) })
+    .then((r) => r.data);
+
+// -------- Projects team task sheet (Work Sheet > Projects tab) --------
+// Its own collection on the server; never part of work items or efficiency.
+export const getProjectTasks = () =>
+  axios.get(`${API}/project-tasks`).then((r) => r.data);
+
+export const createProjectTask = (fields) =>
+  axios.post(`${API}/project-tasks`, fields).then((r) => r.data);
+
+export const updateProjectTask = (id, fields) =>
+  axios.patch(`${API}/project-tasks/${id}`, fields).then((r) => r.data);
+
+export const deleteProjectTask = (id) =>
+  axios.delete(`${API}/project-tasks/${id}`).then((r) => r.data);
+
+export const getProjectTaskHistory = () =>
+  axios.get(`${API}/project-tasks/history`).then((r) => r.data);
+
+export const setProjectTaskUpdate = (id, day, note) =>
+  axios.put(`${API}/project-tasks/${id}/updates/${day}`, { note }).then((r) => r.data);
+
+// -------- Meetings (synced from Google Calendar) --------
+export const getMeetings = (start, end) =>
+  axios.get(`${API}/meetings`, { params: { start, end } }).then((r) => r.data);
+
+export const getMeetingsStatus = () =>
+  axios.get(`${API}/meetings/status`).then((r) => r.data);
+
+export const syncMeetingsNow = () =>
+  axios.post(`${API}/meetings/sync`).then((r) => r.data);

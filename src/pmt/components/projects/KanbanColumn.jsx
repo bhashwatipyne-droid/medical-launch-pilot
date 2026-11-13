@@ -1,0 +1,191 @@
+import { useState } from "react";
+import { EyeOff } from "lucide-react";
+
+import { PROJECTS } from "@/constants/testIds";
+import { ProjectCard } from "./ProjectCard";
+import { statusStyle } from "./projectVisuals";
+
+const COLUMN_TESTIDS = {
+  Active: PROJECTS.columnActive,
+  "Approval Pending": PROJECTS.columnApprovalPending,
+  Completed: PROJECTS.columnCompleted,
+  "Ready for Invoice": PROJECTS.columnReadyForInvoice,
+  "Raised Invoice": PROJECTS.columnRaisedInvoice,
+  "On Hold": PROJECTS.columnOnHold,
+  Scrapped: PROJECTS.columnScrapped,
+};
+
+// Column width from the design (the same 4-up grid as the metric cards).
+export const COLUMN_WIDTH = 279.5;
+
+// How many cards a column renders at first, and how many more each "Show
+// more" click adds. Rendering every project at once (800+ in total, roughly
+// 40,000 DOM elements) made every click and keystroke on this page take
+// hundreds of milliseconds. Counts, "select all", drag-and-drop targets and
+// filters still work on the full list - only the DOM is paged.
+const INITIAL_VISIBLE = 40;
+const VISIBLE_STEP = 40;
+
+// Blend #rrggbb `hex` with white (or `base`): `pct` percent of `hex`.
+const mixHex = (hex, pct, base = "#ffffff") => {
+  const parse = (h) => {
+    const n = parseInt(String(h).replace("#", ""), 16) || 0;
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const a = parse(hex);
+  const b = parse(base);
+  return `#${a
+    .map((v, i) => Math.round((v * pct + b[i] * (100 - pct)) / 100).toString(16).padStart(2, "0"))
+    .join("")}`;
+};
+
+export const KanbanColumn = ({
+  status,
+  projects,
+  lookalikeTextById,
+  onOpenProject,
+  selectedProjects,
+  selectionMode = false,
+  onSelectProject,
+  onSelectAll,
+  allSelected,
+  onHideProject,
+  onUnhideProject,
+  onDeleteProject,
+  onToggleVisibility,
+  onDragOverColumn,
+  onDropColumn,
+  onDragStartProject,
+  onDragEndProject,
+  onDragOverProject,
+  onDropProject,
+  dragOverProjectId,
+  isDropTarget = false,
+  readOnly = false,
+  canEditInvoice = false,
+  onInvoiceSaved,
+}) => {
+  const s = statusStyle(status);
+  // Darker status colours for the column and its header.
+  const tint = {
+    column: mixHex(s.dot, 7),
+    head: mixHex(s.dot, 16),
+    edge: mixHex(s.dot, 30),
+    ink: mixHex(s.dot, 60, "#0d1c3d"),
+  };
+
+  const [limit, setLimit] = useState(INITIAL_VISIBLE);
+  const shownProjects =
+    projects.length > limit ? projects.slice(0, limit) : projects;
+  const hiddenCount = projects.length - shownProjects.length;
+
+  return (
+    <div
+      onDragOver={readOnly ? undefined : (event) => onDragOverColumn?.(event, status)}
+      onDrop={readOnly ? undefined : (event) => onDropColumn?.(event, status)}
+      style={{
+        width: COLUMN_WIDTH,
+        minWidth: COLUMN_WIDTH,
+        background: tint.column,
+        boxShadow: `inset 0 0 0 1px ${tint.edge}`,
+      }}
+      className="flex shrink-0 flex-col rounded-[10px] px-[5px] pb-[5px] max-md:snap-start"
+    >
+      {/* Header pill. Sticky: the board scrolls vertically inside its own box
+          (ProjectsContent), so the status and count stay in view while the
+          admin scrolls a long column. The wrapper carries the page colour so
+          cards slide under it cleanly, and the 7px gap below the pill. */}
+      <div
+        className="sticky top-0 z-10 rounded-t-[10px] pb-[7px] pt-[5px]"
+        style={{ background: tint.column }}
+      >
+      <div
+        className="group flex h-[37px] items-center gap-2 rounded-[8px] border pl-3 pr-3"
+        style={{ background: tint.head, borderColor: tint.edge }}
+      >
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.dot }} />
+        <span
+          className="truncate text-[12.5px] font-semibold leading-none"
+          style={{ color: tint.ink }}
+        >
+          {status}
+        </span>
+
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {selectionMode && !readOnly && projects.length > 0 && (
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => onSelectAll?.(projects)}
+              aria-label={allSelected ? `Deselect all ${status} projects` : `Select all ${status} projects`}
+              className="h-3.5 w-3.5 cursor-pointer rounded accent-[#3b6ef6]"
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => onToggleVisibility?.(status)}
+            title={`Hide ${status} column`}
+            aria-label={`Hide ${status} column`}
+            className="hidden h-5 w-5 items-center justify-center rounded text-[#98a1af] hover:bg-white/70 hover:text-[#4b5563] focus-visible:flex group-hover:flex"
+          >
+            <EyeOff className="h-3.5 w-3.5" />
+          </button>
+          <span
+            className="text-[11.5px] font-medium leading-none"
+            style={{ color: tint.ink, opacity: 0.8 }}
+          >
+            {projects.length}
+          </span>
+        </span>
+      </div>
+      </div>
+
+      {/* Cards */}
+      <div
+        data-testid={COLUMN_TESTIDS[status]}
+        className={`flex min-h-[200px] flex-1 flex-col gap-[7px] rounded-[10px] transition-colors ${
+          isDropTarget ? "bg-white/60" : ""
+        }`}
+      >
+        {shownProjects.map((project) => (
+          <ProjectCard
+            key={project.id}
+            project={project}
+            lookalikeText={lookalikeTextById?.get(project.id)}
+            selected={selectedProjects?.has(project.id)}
+            selectionMode={selectionMode}
+            onSelect={onSelectProject}
+            onOpen={onOpenProject}
+            onHide={onHideProject}
+            onUnhide={onUnhideProject}
+            onDelete={onDeleteProject}
+            onDragStart={onDragStartProject}
+            onDragEnd={onDragEndProject}
+            onDragOver={onDragOverProject}
+            onDrop={onDropProject}
+            isDragTarget={dragOverProjectId === project.id}
+            readOnly={readOnly}
+            canEditInvoice={canEditInvoice}
+            onInvoiceSaved={onInvoiceSaved}
+          />
+        ))}
+
+        {projects.length === 0 && (
+          <div className="flex h-[120px] items-center justify-center rounded-[10px] border border-dashed border-[#dde1e7] text-[12px] text-[#98a1af]">
+            {readOnly ? "No projects" : "Drop a project here"}
+          </div>
+        )}
+
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setLimit((current) => current + VISIBLE_STEP)}
+            className="h-9 rounded-[10px] border border-dashed border-[#dde1e7] bg-white/60 text-[12px] font-medium text-[#3b6ef6] hover:bg-white"
+          >
+            Show {Math.min(VISIBLE_STEP, hiddenCount)} more ({hiddenCount} not shown)
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};

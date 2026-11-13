@@ -1,0 +1,241 @@
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import "@/App.css";
+import {
+  BrowserRouter,
+  HashRouter,
+  Navigate,
+  Routes,
+  Route,
+  useLocation,
+} from "react-router-dom";
+import { UserProvider, useUser } from "@/context/UserContext";
+import { trackEvent, setAnalyticsContext } from "@/analytics";
+import { APP_ACTIONS, QUICK_LOG_ENABLED, requestAppAction, setQuickLogPreset } from "@/lib/appActions";
+import { Toaster } from "@/components/ui/sonner";
+import { AppLayout } from "@/components/layout/AppLayout";
+import PushNotifications from "@/components/notifications/PushNotifications";
+import { AppShellSkeleton } from "@/components/skeletons/Skeletons";
+import { RequireAccess } from "@/components/layout/RequireAccess";
+import { getAccess } from "@/lib/permissions";
+import { IS_PROTOTYPE } from "@/demo/demoMode";
+
+// Every page used to be imported eagerly here, which meant visiting any
+// one route (even the Work Sheet) pulled the JS for every other page —
+// Dashboard, Projects, Approvals, Team, Clients, Profile, all three
+// Efficiency pages — into the same bundle before the browser could paint
+// anything. Lazy-loading means only the matched route's own code (plus
+// shared vendor code) has to download and parse before first paint;
+// everything else loads on demand when actually navigated to.
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const WorkSheetPage = lazy(() => import("@/pages/WorkSheetPage"));
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const ProjectsPage = lazy(() => import("@/pages/ProjectsPage"));
+const ProjectDetailPage = lazy(() => import("@/pages/ProjectDetailPage"));
+const TeamPage = lazy(() => import("@/pages/TeamPage"));
+const ApprovalsPage = lazy(() => import("@/pages/ApprovalsPage"));
+const ClientsPage = lazy(() => import("@/pages/ClientsPage"));
+const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
+const PlanningPage = lazy(() => import("@/pages/PlanningPage"));
+const MeetingsPage = lazy(() => import("@/pages/MeetingsPage"));
+const InvoicingPage = lazy(() => import("@/pages/InvoicingPage"));
+const EfficiencyPage = lazy(() => import("@/pages/EfficiencyPage"));
+const EfficiencyMonthlyCapacityPage = lazy(() =>
+  import("@/pages/EfficiencyMonthlyCapacityPage")
+);
+const EfficiencyActivityTargetsPage = lazy(() =>
+  import("@/pages/EfficiencyActivityTargetsPage")
+);
+
+const PAGE_NAMES = {
+  "/": "Work Sheet",
+  "/dashboard": "Dashboard",
+  "/efficiency": "Efficiency",
+  "/efficiency/settings/monthly-capacity": "Monthly Capacity",
+  "/efficiency/settings/activity-targets": "Activity Targets",
+  "/projects": "Projects",
+  "/team": "Team",
+  "/approvals": "Approvals",
+  "/clients": "Clients",
+  "/profile": "Profile",
+  "/planning": "Planning",
+  "/meetings": "Meetings",
+  "/invoicing": "Ready to invoice",
+};
+
+function AppShell() {
+  const { loading, isAuthenticated, currentUser, logout } = useUser();
+  // The emailed reset link (/?reset_token=...) shows the "choose a new
+  // password" screen even if someone is already signed in in this browser.
+  const [resetInProgress, setResetInProgress] = useState(() => {
+    try {
+      return Boolean(new URLSearchParams(window.location.search).get("reset_token"));
+    } catch {
+      return false;
+    }
+  });
+  const location = useLocation();
+  const lastTrackedPath = useRef(null);
+
+  // "Log work" on a shared project page (served by frontend/api/share-preview.js)
+  // lands here as /?log_work=<project id>: open the quick logger on that project
+  // once the Work Sheet is up (after sign-in, if needed).
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const projectId = params.get("log_work");
+      if (!projectId) return;
+      if (QUICK_LOG_ENABLED) {
+        setQuickLogPreset(projectId);
+        requestAppAction(APP_ACTIONS.QUICK_LOG);
+      }
+      params.delete("log_work");
+      const query = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
+    } catch (_) {
+      // a malformed address just opens the app as usual
+    }
+  }, []);
+
+  // Every page view is recorded - including the sign-in screen and shared
+  // links before anyone is signed in - and the current page is attached to
+  // every later event (clicks, errors, API calls) as page_name.
+  useEffect(() => {
+    if (loading) return;
+
+    const pathname = location.pathname;
+
+    // Prevent duplicate events for the same route.
+    const signature = `${pathname}|${isAuthenticated ? currentUser?.id : "anon"}`;
+    if (lastTrackedPath.current === signature) return;
+    lastTrackedPath.current = signature;
+
+    const pageName = !isAuthenticated
+      ? "Login"
+      : pathname.startsWith("/projects/")
+        ? "Project Detail"
+        : pathname.startsWith("/share/")
+          ? "Shared Project"
+          : PAGE_NAMES[pathname] || "Unknown Page";
+
+    setAnalyticsContext({ page_name: pageName, page_path: pathname });
+
+    trackEvent("page_view", {
+      user_id: currentUser?.id ? String(currentUser.id) : undefined,
+      username: currentUser?.username,
+      role: currentUser?.role,
+      path: pathname,
+      page_name: pageName,
+      authenticated: Boolean(isAuthenticated),
+    });
+  }, [
+    loading,
+    location.pathname,
+    isAuthenticated,
+    currentUser?.id,
+    currentUser?.role,
+  ]);
+
+  if (loading) {
+    return <AppShellSkeleton />;
+  }
+
+  return (
+    <Suspense fallback={<AppShellSkeleton />}>
+      {!isAuthenticated || resetInProgress ? (
+        <LoginPage
+          onResetDone={async () => {
+            // After a reset, sign in again with the new password.
+            if (isAuthenticated) await logout();
+            setResetInProgress(false);
+          }}
+          onResetCancel={async () => {
+            // Leaving the reset screen (e.g. an expired link) must land on a
+            // real sign-in page, not silently resume an old session.
+            if (isAuthenticated) await logout();
+            setResetInProgress(false);
+          }}
+        />
+      ) : (
+        <AppLayout>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                currentUser?.role === "hr" ? (
+                  <Navigate to="/invoicing" replace />
+                ) : IS_PROTOTYPE ? (
+                  // PROTOTYPE: no Work sheet; start on Home (CEO, Product manager) or Projects.
+                  <Navigate to={getAccess(currentUser).canViewHome ? "/dashboard" : "/projects"} replace />
+                ) : (
+                  <WorkSheetPage />
+                )
+              }
+            />
+            <Route
+              path="/planning"
+              element={<RequireAccess><PlanningPage /></RequireAccess>}
+            />
+            <Route
+              path="/meetings"
+              element={<RequireAccess><MeetingsPage /></RequireAccess>}
+            />
+            <Route
+              path="/invoicing"
+              element={<RequireAccess><InvoicingPage /></RequireAccess>}
+            />
+            <Route
+              path="/dashboard"
+              element={<RequireAccess><DashboardPage /></RequireAccess>}
+            />
+            <Route
+              path="/efficiency"
+              element={<RequireAccess><EfficiencyPage /></RequireAccess>}
+            />
+            <Route
+              path="/efficiency/settings/monthly-capacity"
+              element={<RequireAccess><EfficiencyMonthlyCapacityPage /></RequireAccess>}
+            />
+            <Route
+              path="/efficiency/settings/activity-targets"
+              element={<RequireAccess><EfficiencyActivityTargetsPage /></RequireAccess>}
+            />
+            <Route path="/projects" element={<ProjectsPage />} />
+            <Route
+              path="/projects/:projectId"
+              element={<ProjectDetailPage />}
+            />
+            <Route
+              path="/team"
+              element={<RequireAccess><TeamPage /></RequireAccess>}
+            />
+            <Route path="/approvals" element={<ApprovalsPage />} />
+            <Route
+              path="/clients"
+              element={<RequireAccess><ClientsPage /></RequireAccess>}
+            />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Routes>
+        </AppLayout>
+      )}
+    </Suspense>
+  );
+}
+
+// PROTOTYPE builds are static files, so they route on the URL hash.
+const Router = process.env.REACT_APP_PROTOTYPE === "true" ? HashRouter : BrowserRouter;
+
+function App() {
+  return (
+    <div className="App">
+      <UserProvider>
+        <Router>
+          <AppShell />
+        </Router>
+        <Toaster position="top-right" />
+        <PushNotifications />
+      </UserProvider>
+    </div>
+  );
+}
+
+export default App;

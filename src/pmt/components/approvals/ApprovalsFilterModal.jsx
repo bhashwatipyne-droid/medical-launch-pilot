@@ -1,0 +1,262 @@
+import { useEffect, useState } from "react";
+import { SlidersHorizontal } from "lucide-react";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { APPROVALS } from "@/constants/testIds";
+
+const EMPTY_VALUES = {
+  stageFilter: "",
+  projectFilter: "",
+  deadlineFilter: "",
+  dateFrom: "",
+  dateTo: "",
+};
+
+/**
+ * Filters control for the Approvals page.
+ *
+ * Self-contained: renders its own trigger button (with the active-filter
+ * count badge) and its own Popover, so the panel anchors to the button
+ * instead of opening as a centered page-level dialog. Owns its own draft
+ * state so opening/closing without hitting "Apply filters" never mutates
+ * the parent's committed filters.
+ *
+ * Authority is no longer a filter field here — the redesign's queue tabs
+ * (Manager/Leadership/Client SPOC/Compliance) own that dimension now, so
+ * this only covers stage/project/date, which apply within whichever
+ * queue tab is active.
+ */
+export default function ApprovalsFilterModal({
+  stages,
+  projectOptions,
+  initialValues,
+  onApply,
+  activeFilterCount = 0,
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState({ ...EMPTY_VALUES, ...initialValues });
+
+  // Re-sync the draft to whatever is currently applied every time the
+  // panel is opened, so it always starts from the committed filters.
+  useEffect(() => {
+    if (open) {
+      setDraft({ ...EMPTY_VALUES, ...initialValues });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const setField = (key) => (value) =>
+    setDraft((prev) => ({ ...prev, [key]: value }));
+
+  // "Clear all" clears the filters right away. It used to only empty the
+  // form, so the filters stayed applied (and the count badge stayed lit) until
+  // you also pressed "Apply filters" - which looked like clearing did nothing.
+  const clearAll = () => {
+    setDraft({ ...EMPTY_VALUES });
+    onApply({ ...EMPTY_VALUES });
+    setOpen(false);
+  };
+
+  // A filter whose stage/project is no longer in the queue (e.g. its last item
+  // was approved) is still applied. Keep it in the list so the dropdown shows
+  // what is really filtering the list instead of a misleading "All".
+  const stageList =
+    draft.stageFilter && !stages.includes(draft.stageFilter)
+      ? [...stages, draft.stageFilter]
+      : stages;
+  const projectList =
+    draft.projectFilter && !projectOptions.includes(draft.projectFilter)
+      ? [...projectOptions, draft.projectFilter]
+      : projectOptions;
+
+  const handleApply = () => {
+    // Someone can type the dates in either order — treat an inverted range
+    // as the range they meant rather than silently matching nothing.
+    if (draft.dateFrom && draft.dateTo && draft.dateFrom > draft.dateTo) {
+      onApply({ ...draft, dateFrom: draft.dateTo, dateTo: draft.dateFrom });
+    } else {
+      onApply(draft);
+    }
+    setOpen(false);
+  };
+
+  return (
+    <>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-testid={APPROVALS.filterButton}
+          className={[
+            "inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border bg-white px-3 text-sm font-medium outline-none transition-colors",
+            "focus:border-[#2b2bb5] focus:ring-[3px] focus:ring-[#2b2bb5]/20",
+            activeFilterCount > 0
+              ? "border-[#2b2bb5] text-[#2b2bb5]"
+              : "border-input text-foreground hover:bg-slate-50",
+          ].join(" ")}
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#eef0ff] px-1.5 text-[11px] font-semibold text-[#2b2bb5]">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent align="start" className="w-80 rounded-xl p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-sm font-semibold text-foreground">
+            Filters
+          </span>
+
+          <button
+            type="button"
+            onClick={clearAll}
+            className="text-xs font-medium text-[#2b2bb5] hover:underline"
+          >
+            Clear all
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Production stage
+            </label>
+
+            <select
+              data-testid={APPROVALS.filterStage}
+              value={draft.stageFilter}
+              onChange={(e) => setField("stageFilter")(e.target.value)}
+              className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-foreground outline-none focus:border-[#2b2bb5] focus:ring-[3px] focus:ring-[#2b2bb5]/20"
+            >
+              <option value="">All</option>
+              {stageList.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Deadline
+            </label>
+
+            <select
+              value={draft.deadlineFilter}
+              onChange={(e) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  deadlineFilter: e.target.value,
+                  // A date range only makes sense for items that have one.
+                  ...(e.target.value === "without" ? { dateFrom: "", dateTo: "" } : {}),
+                }))
+              }
+              className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-foreground outline-none focus:border-[#2b2bb5] focus:ring-[3px] focus:ring-[#2b2bb5]/20"
+            >
+              <option value="">All</option>
+              <option value="with">With a deadline</option>
+              <option value="without">No deadline set</option>
+            </select>
+          </div>
+
+          <div className={draft.deadlineFilter === "without" ? "pointer-events-none opacity-50" : ""}>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Deadline between
+            </label>
+
+            {/* Two plain date fields. This used to be a calendar popover
+                nested inside this popover, which is what made the range
+                unreliable to pick. */}
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted-foreground">
+                  From
+                </span>
+                <input
+                  type="date"
+                  value={draft.dateFrom}
+                  max={draft.dateTo || undefined}
+                  onChange={(e) => setField("dateFrom")(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-input bg-white px-2 text-sm text-foreground outline-none focus:border-[#2b2bb5] focus:ring-[3px] focus:ring-[#2b2bb5]/20"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted-foreground">
+                  To
+                </span>
+                <input
+                  type="date"
+                  value={draft.dateTo}
+                  min={draft.dateFrom || undefined}
+                  onChange={(e) => setField("dateTo")(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-input bg-white px-2 text-sm text-foreground outline-none focus:border-[#2b2bb5] focus:ring-[3px] focus:ring-[#2b2bb5]/20"
+                />
+              </label>
+            </div>
+
+            {(draft.dateFrom || draft.dateTo) && (
+              <button
+                type="button"
+                onClick={() =>
+                  setDraft((prev) => ({ ...prev, dateFrom: "", dateTo: "" }))
+                }
+                className="mt-2 text-xs font-medium text-[#2b2bb5] hover:underline"
+              >
+                Clear dates
+              </button>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Project
+            </label>
+
+            <select
+              data-testid={APPROVALS.filterProject}
+              value={draft.projectFilter}
+              onChange={(e) => setField("projectFilter")(e.target.value)}
+              className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-foreground outline-none focus:border-[#2b2bb5] focus:ring-[3px] focus:ring-[#2b2bb5]/20"
+            >
+              <option value="">All</option>
+              {projectList.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleApply}
+          className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-lg bg-[#2b2bb5] px-4 text-sm font-semibold text-white hover:bg-[#1a1a8a]"
+        >
+          Apply filters
+        </button>
+      </PopoverContent>
+    </Popover>
+
+    {/* Clear without opening the panel. */}
+    {activeFilterCount > 0 && (
+      <button
+        type="button"
+        onClick={clearAll}
+        className="shrink-0 text-xs font-medium text-[#2b2bb5] hover:underline"
+      >
+        Clear filters
+      </button>
+    )}
+    </>
+  );
+}

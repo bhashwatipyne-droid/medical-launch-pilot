@@ -1,0 +1,569 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ─────────────────────────────────────────
+       Mint Design System — Foundations
+       ───────────────────────────────────────── */
+
+    /* Brand */
+    --mint-brand-50: #f0f0fd;
+    --mint-brand-100: #dcdcf8;
+    --mint-brand-500: #2b2bb5;
+    --mint-brand-700: #1a1a8a;
+
+    /* Neutrals */
+    --mint-neutral-50: #f7f9fc;
+    --mint-disabled: #c8d5ee;
+
+    /* Semantic */
+    --mint-success: #16a34a;
+    --mint-error: #dc2626;
+    --mint-warning: #d97706;
+    --mint-info: #2563eb;
+
+    /* ─────────────────────────────────────────
+       shadcn / Tailwind semantic tokens
+       ───────────────────────────────────────── */
+
+    --background: 210 33% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Mint Brand 500 — #2b2bb5 */
+    --primary: 240 61% 44%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Neutral secondary */
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    /* Mint Brand 50 — #f0f0fd */
+    --accent: 240 69% 96%;
+    --accent-foreground: 240 68% 32%;
+
+    /* Muted */
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Semantic destructive */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders / inputs */
+    --border: 214 20% 88%;
+    --input: 214 20% 82%;
+
+    /* Mint Brand 500 */
+    --ring: 240 61% 44%;
+
+    /* Radius — Mint uses compact rounded controls */
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    margin: 0;
+    min-width: 320px;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+@layer components {
+  /* Shared Mint surface */
+  .mint-card {
+    @apply rounded-lg border bg-card;
+  }
+
+  /* Shared section heading */
+  .mint-section-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  /* Shared muted helper text */
+  .mint-helper-text {
+    @apply text-xs text-muted-foreground;
+  }
+
+  /* ─────────────────────────────────────────
+     Work Sheet — spreadsheet cell treatment
+     ───────────────────────────────────────── */
+
+  .sheet-cell {
+    position: relative;
+    min-height: 40px;
+    padding: 4px 8px;
+    border-right: 1px solid #e5e7eb;
+    border-bottom: 1px solid #eef0f4;
+    background: #ffffff;
+    vertical-align: middle;
+  }
+
+  /* Compact rows, like Google Sheets: a one-line row is ~28px instead of ~41px.
+     The controls inside the cells (dropdowns, text inputs) were a fixed 32px
+     (h-8) with 5px of padding of their own, so they are shrunk here too. The
+     utilities layer wins over this one, hence !important. */
+  .sheet-mode .sheet-cell {
+    min-height: 28px;
+    padding: 1px 4px;
+  }
+  .sheet-mode .sheet-cell:not(.sheet-cell-wrap) button.h-8,
+  .sheet-mode .sheet-cell:not(.sheet-cell-wrap) input.h-8,
+  .sheet-mode .sheet-cell:not(.sheet-cell-wrap) textarea.h-8 {
+    height: 26px !important;
+    min-height: 26px !important;
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+  }
+  /* A wrapped column keeps the height its text needs (the textarea sets it
+     itself); only the padding is tightened. */
+  .sheet-mode .sheet-cell-wrap button.h-8,
+  .sheet-mode .sheet-cell-wrap textarea.h-8 {
+    min-height: 26px !important;
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+  }
+  .sheet-mode .sheet-cell-wrap button.h-8 {
+    height: auto !important;
+  }
+  .sheet-mode .cell-plain {
+    padding: 3px 4px;
+  }
+  .sheet-mode .row-num {
+    padding-top: 4px;
+  }
+  .sheet-mode tbody .checkbox-cell {
+    padding-top: 6px !important;
+  }
+
+  .sheet-cell:hover {
+    background: #fafbff;
+  }
+
+  .sheet-cell-active {
+    background: #ffffff;
+    box-shadow: inset 0 0 0 2px #2b2bb5;
+    z-index: 2;
+  }
+
+  /* Cells take focus for keyboard navigation; the active-cell ring above is
+     the focus indicator, so skip the browser's own outline. */
+  .sheet-cell:focus {
+    outline: none;
+  }
+
+  .sheet-cell-fill-range {
+    background: #f0f0fd;
+    box-shadow: inset 0 0 0 1px #2b2bb5;
+  }
+
+  .sheet-cell-fill-range.sheet-cell-active {
+    background: #f0f0fd;
+    box-shadow: inset 0 0 0 2px #2b2bb5;
+  }
+
+  .sheet-cell-range-select {
+    background: #e3ecfd;
+  }
+
+  .sheet-cell-range-select.sheet-cell-active {
+    background: #e3ecfd;
+    box-shadow: inset 0 0 0 2px #2b2bb5;
+  }
+
+  /* Checkbox-selected row. Each cell has its own opaque background (see
+     .sheet-cell above), so highlighting the row itself does nothing
+     visually unless the cells' own backgrounds are tinted too. */
+  .sheet-row-selected .sheet-cell,
+  .sheet-row-selected .row-num,
+  .sheet-row-selected .checkbox-cell {
+    background: #eef6ff;
+  }
+
+  /* A cell can be both in a selected row AND the active/fill/range cell
+     at the same time — those states take priority over the plain row
+     tint so the user can still see which cell they're on. */
+  .sheet-row-selected .sheet-cell-active {
+    background: #ffffff;
+    box-shadow: inset 0 0 0 2px #2b2bb5;
+  }
+
+  .sheet-row-selected .sheet-cell-fill-range,
+  .sheet-row-selected .sheet-cell-range-select {
+    background: #f0f0fd;
+  }
+
+  .sheet-fill-handle {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: #2b2bb5;
+    border: 1px solid #ffffff;
+    cursor: crosshair;
+    z-index: 5;
+  }
+
+  .sheet-fill-handle:hover {
+    width: 9px;
+    height: 9px;
+    right: -4px;
+    bottom: -4px;
+  }
+
+  /* Read-only cell text is clipped on one line with an ellipsis (the formula
+     bar above the sheet shows the whole value). */
+  .cell-plain {
+    display: block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #334155;
+    font-size: 13px;
+    line-height: 20px;
+    padding: 6px 4px;
+  }
+
+  /* A column set to "Wrap text" (column menu): its text flows onto several
+     lines and the row grows to fit, instead of being clipped with an ellipsis. */
+  .sheet-cell-wrap .cell-plain,
+  .sheet-cell-wrap button > span.truncate {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere;
+  }
+  .sheet-cell-wrap button.h-8 {
+    height: auto !important;
+    min-height: 2rem;
+    align-items: flex-start;
+  }
+  .sheet-cell-wrap textarea {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere;
+    text-overflow: clip !important;
+    height: auto;
+  }
+
+  /* Row gutter = drag grip + checkbox. Both cells share one background and
+     the divider sits after the checkbox, so they read as a single column. */
+  .row-num {
+    width: 26px;
+    min-width: 26px;
+    padding: 8px 0 0 4px;
+    border-right: 0;
+    border-bottom: 1px solid #eef0f4;
+    background: #ffffff;
+    color: #94a3b8;
+    font-size: 11px;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .sheet-mode tbody tr:hover .row-num {
+    color: #64748b;
+  }
+
+  /* Frozen gutter: the drag grip and the checkbox stay put while the sheet
+     scrolls sideways. Widths match ROW_NUM_WIDTH / CHECKBOX_WIDTH in
+     constants/worksheetColumnWidths.js (the checkbox sits right after the
+     grip). Their backgrounds are opaque, so the columns slide underneath. */
+  .sheet-mode .row-num,
+  .sheet-mode .row-num-head {
+    position: sticky !important;
+    left: 0;
+    z-index: 20;
+  }
+
+  .sheet-mode .checkbox-cell {
+    position: sticky !important;
+    left: 26px;
+    z-index: 20;
+  }
+
+  .sheet-mode tbody .checkbox-cell {
+    border-right: 1px solid #e5e7eb;
+    border-bottom: 1px solid #eef0f4;
+    background: #ffffff;
+  }
+
+  .sheet-mode tbody .sheet-row-selected .checkbox-cell {
+    background: #eef6ff;
+  }
+
+  .sheet-mode tbody tr:hover {
+    background: #fafbff;
+  }
+
+  .sheet-mode .sheet-cell > input,
+  .sheet-mode .sheet-cell > textarea,
+  .sheet-mode .sheet-cell > button {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .sheet-mode .sheet-cell > input:hover,
+  .sheet-mode .sheet-cell > textarea:hover,
+  .sheet-mode .sheet-cell > button:hover {
+    border-color: #dcdcf8;
+    background: #fafbff;
+  }
+
+  .sheet-mode .sheet-cell-active > input,
+  .sheet-mode .sheet-cell-active > textarea,
+  .sheet-mode .sheet-cell-active > button {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .sheet-mode .sheet-cell-active > input:focus,
+  .sheet-mode .sheet-cell-active > textarea:focus,
+  .sheet-mode .sheet-cell-active > button:focus {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .sheet-mode .sheet-cell > input:disabled,
+  .sheet-mode .sheet-cell > textarea:disabled,
+  .sheet-mode .sheet-cell > button:disabled {
+    opacity: 1;
+    cursor: default;
+    color: #475569;
+  }
+
+  .sheet-mode .sheet-cell > textarea {
+    line-height: 20px;
+  }
+
+  /* Qty chip: a number is entered, so the cell is a button that opens the
+     side panel. Needs its own look - the rules above blank every button that
+     is a direct child of a cell. */
+  .sheet-mode .sheet-cell > button.qty-chip {
+    background: #f0f0fd;
+    color: #1a1a8a;
+    box-shadow: inset 0 0 0 1px #9090ec;
+  }
+
+  .sheet-mode .sheet-cell > button.qty-chip:hover {
+    background: #e6e6fb;
+    border-color: transparent;
+  }
+
+  .sheet-mode .sheet-cell > button.qty-chip[aria-expanded="true"],
+  .sheet-mode .sheet-cell > button.qty-chip[aria-expanded="true"]:hover {
+    background: #2b2bb5;
+    color: #ffffff;
+    box-shadow: none;
+  }
+
+  /* Date cells: calendar icon on the left. On the right it sat past the
+     column's edge and was clipped out of sight. */
+  /* The input's left padding (pl-7) is set in WorkSheetRow; a padding rule
+     here would lose to the Input component's own px-3. */
+  .sheet-date-input {
+    position: relative;
+  }
+
+  .sheet-date-input::-webkit-calendar-picker-indicator {
+    position: absolute;
+    left: 6px;
+    margin: 0;
+    padding: 0;
+    width: 14px;
+    height: 14px;
+    opacity: 0.55;
+    cursor: pointer;
+  }
+
+  .sheet-date-input:hover::-webkit-calendar-picker-indicator,
+  .sheet-date-input:focus::-webkit-calendar-picker-indicator {
+    opacity: 0.9;
+  }
+
+  .sheet-date-input:disabled::-webkit-calendar-picker-indicator {
+    cursor: default;
+    opacity: 0.35;
+  }
+
+  .sheet-mode .sheet-cell a {
+    color: #2b2bb5;
+    text-decoration: none;
+  }
+
+  .sheet-mode .sheet-cell a:hover {
+    color: #1a1a8a;
+    text-decoration: underline;
+  }
+
+  /* Keep status badges visually distinct from editable controls */
+  .sheet-mode .sheet-cell:last-child > button {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .sheet-mode .sheet-cell:last-child > button:hover {
+    background: transparent;
+  }
+}
+@layer utilities {
+  .sheet-mode .sheet-cell {
+    box-sizing: border-box;
+    height: auto;
+    min-height: 40px;
+    padding: 4px 8px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* In a tall (wrapped) row the dropdown button / text box fills its cell, so
+     the whole cell is what you click, not just its first line. */
+  .sheet-mode .sheet-cell > button,
+  .sheet-mode .sheet-cell > textarea {
+    flex: 1 1 auto;
+  }
+
+  .sheet-mode .sheet-cell > input,
+  .sheet-mode .sheet-cell > textarea,
+  .sheet-mode .sheet-cell > button {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  .sheet-mode .sheet-cell > input,
+  .sheet-mode .sheet-cell > textarea {
+    width: 100%;
+  }
+
+  /* The Qty chip and its empty box are 26px controls centred in the cell, as
+     in the redesign - not stretched to fill a tall (wrapped) row like the
+     dropdown buttons above. */
+  .sheet-mode .sheet-cell > button.qty-chip,
+  .sheet-mode .sheet-cell > input.qty-add {
+    flex: 0 0 auto;
+    height: 26px;
+    margin-block: auto;
+  }
+
+  /* The empty Qty box has a faint outline (neutral-200) in the redesign. */
+  .sheet-mode .sheet-cell > input.qty-add:not(:hover):not(:focus) {
+    border-color: #eff0f2;
+  }
+}
+/* Always-visible horizontal scrollbar for wide, side-scrolling content (the
+   Projects/Approvals Kanban boards, wide tables). Without this, a container
+   that CAN scroll horizontally often shows no visible scrollbar at all until
+   the user hovers or scrolls (macOS's default "overlay" scrollbars, and
+   Chrome/Edge's default thin-but-easy-to-miss bar), so the fact that there
+   is more to see off-screen isn't obvious. */
+.pmt-hscroll {
+  overflow-x: scroll;
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #c7c9d9 #f1f2f7; /* Firefox: thumb, track */
+}
+
+.pmt-hscroll::-webkit-scrollbar {
+  height: 10px;
+}
+
+.pmt-hscroll::-webkit-scrollbar-track {
+  background: #f1f2f7;
+  border-radius: 9999px;
+}
+
+.pmt-hscroll::-webkit-scrollbar-thumb {
+  background-color: #c7c9d9;
+  border-radius: 9999px;
+  border: 2px solid #f1f2f7;
+}
+
+.pmt-hscroll::-webkit-scrollbar-thumb:hover {
+  background-color: #a9acc4;
+}
+
+/* ── Phones (below Tailwind md) ─────────────────────────────────────────────
+   iOS Safari zooms the whole page when a field under 16px gets focus, and then
+   stays zoomed. Keep every text-entry control at 16px on phones. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Momentum scrolling and no rubber-banding of the whole page behind panels */
+body {
+  overscroll-behavior-y: none;
+}
+
+/* Wide tables/boards keep their own horizontal scroll; the page never scrolls sideways. */
+@media (max-width: 767px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+}
+
+:root {
+  --pmt-bottom-offset: 0px;
+  /* Width of the sidebar (the Sidebar sets --pmt-sidebar-w to 68px / 236px),
+     so floating buttons can rest just right of it. */
+  --pmt-sidebar-width: var(--pmt-sidebar-w, 236px);
+}
+
+@media (max-width: 767px) {
+  :root {
+    /* height of the fixed bottom nav, so floating buttons sit above it */
+    --pmt-bottom-offset: calc(56px + env(safe-area-inset-bottom));
+    /* no sidebar on a phone */
+    --pmt-sidebar-width: 0px;
+  }
+}
+
+/* Planning: tighter page padding, and the person column stays put while the
+   timeline scrolls sideways. */
+@media (max-width: 767px) {
+  .pmt-plan-wrap {
+    padding: 16px 12px 32px !important;
+    gap: 16px !important;
+  }
+
+  .pmt-sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+  }
+}
