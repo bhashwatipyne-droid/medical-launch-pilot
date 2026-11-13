@@ -61,7 +61,7 @@ export const CreateProjectModal = ({
     () => (editProject ? allProjects.filter((p) => p.id !== editProject.id) : allProjects),
     [allProjects, editProject]
   );
-  const { currentUserId } = useUser();
+  const { currentUserId, users } = useUser();
   const navigate = useNavigate();
 
   const [name, setName] = useState("");
@@ -149,7 +149,13 @@ export const CreateProjectModal = ({
   if (!open) return null;
 
   const selectedClient = clients.find((client) => client.id === clientId);
-  const availablePocs = selectedClient?.contact_persons || [];
+  // The product owner is a person on the team (anyone active, Product team
+  // first), not a contact of the product line - a product line has no contacts
+  // of its own here, which is why the list used to say "No owners yet".
+  const availablePocs = (users || [])
+    .filter((u) => u.active !== false && !u.removed)
+    .sort((a, b) => Number(b.department === "Product") - Number(a.department === "Product") || String(a.name).localeCompare(String(b.name)))
+    .map((u) => ({ id: u.id, name: u.department ? `${u.name} (${u.department})` : u.name }));
 
   // Client search: most-used clients when empty; otherwise names containing
   // the text, then look-alike names ("ABSL" finds Aditya Birla Sun Life MF).

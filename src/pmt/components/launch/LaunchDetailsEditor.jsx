@@ -19,7 +19,7 @@ import {
 const INPUT =
   "w-full min-w-0 rounded-lg border border-input bg-white px-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[#2b2bb5] focus:ring-[3px] focus:ring-[#2b2bb5]/20 disabled:bg-slate-50 disabled:text-slate-500";
 
-function FieldInput({ field, value, onChange, disabled }) {
+export function FieldInput({ field, value, onChange, disabled }) {
   const id = `launch-${field.key}`;
   const common = { id, disabled, value: value ?? "", onChange: (e) => onChange(e.target.value) };
   let control;
@@ -50,7 +50,7 @@ function FieldInput({ field, value, onChange, disabled }) {
 }
 
 // A stage worked by two teams (Packaging) shows each team's part under its own heading.
-function FieldGroupItem({ field, prev, children }) {
+export function FieldGroupItem({ field, prev, children }) {
   const starts = field.group && field.group !== prev?.group;
   if (!starts) return children;
   return (
@@ -75,7 +75,10 @@ export function LaunchDetailsEditor({ deliverable, launch, onChange, onSubmitFor
   const at = flow.indexOf(stage);
   const done = status === "Completed";
   const inReview = status === "Ready for Review";
-  const editable = !done && !inReview;
+  // Details stay editable while the stage waits for approval; only the
+  // finished flow is locked. Sending for approval is only offered before that.
+  const editable = !done;
+  const canSend = !done && !inReview;
   const missing = missingFields(stage, launch);
   const gate = CEO_GATES[stage];
   const next = flow[at + 1];
@@ -120,7 +123,8 @@ export function LaunchDetailsEditor({ deliverable, launch, onChange, onSubmitFor
 
       {inReview && (
         <div className="mt-4 rounded-lg bg-[rgb(219,234,254)] px-3.5 py-2.5 text-[13px] text-[rgb(30,64,175)]">
-          Submitted for review. It is waiting in Approvals{gate ? " for the manager, then the CEO" : ""}.
+          Submitted for review. It is waiting in Approvals{gate ? " for the manager, then the CEO" : ""}. You can still
+          edit the details below; save to update what the approver sees.
         </div>
       )}
 
@@ -142,7 +146,11 @@ export function LaunchDetailsEditor({ deliverable, launch, onChange, onSubmitFor
       {editable && (
         <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
           <span className="text-xs text-muted-foreground">
-            {missing.length ? `Add ${missing.map((f) => f.label.toLowerCase()).join(", ")} to send it.` : "Ready to send for approval."}
+            {!canSend
+              ? "Changes save straight to the approval."
+              : missing.length
+                ? `Add ${missing.map((f) => f.label.toLowerCase()).join(", ")} to send it.`
+                : "Ready to send for approval."}
           </span>
           {onSave && (
             <button
@@ -153,19 +161,21 @@ export function LaunchDetailsEditor({ deliverable, launch, onChange, onSubmitFor
               className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white px-3.5 text-sm font-semibold text-[rgb(13,27,62)] shadow-[inset_0_0_0_1px_rgb(229,231,235)] hover:bg-slate-50 disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
-              Save
+              {canSend ? "Save" : "Save changes"}
             </button>
           )}
-          <button
-            type="button"
-            data-testid="launch-submit-review"
-            disabled={busy || missing.length > 0}
-            onClick={onSubmitForReview}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#2b2bb5] px-3.5 text-sm font-semibold text-white hover:bg-[#1a1a8a] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Send className="h-4 w-4" />
-            Send for approval
-          </button>
+          {canSend && (
+            <button
+              type="button"
+              data-testid="launch-submit-review"
+              disabled={busy || missing.length > 0}
+              onClick={onSubmitForReview}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#2b2bb5] px-3.5 text-sm font-semibold text-white hover:bg-[#1a1a8a] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Send className="h-4 w-4" />
+              Send for approval
+            </button>
+          )}
         </div>
       )}
 

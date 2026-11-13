@@ -1,4 +1,4 @@
-import { Layers, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Layers, Plus, Trash2 } from "lucide-react";
 import { PROJECTS } from "@/constants/testIds";
 import { fieldBase } from "@/components/projects/createProjectLogic";
 
@@ -6,21 +6,28 @@ export const PILL =
   "flex h-10 items-center gap-2 rounded-full border-0 bg-white px-3.5 text-sm text-[rgb(13,27,62)] shadow-[inset_0_0_0_1px_rgb(229,231,235)] outline-none focus:shadow-[inset_0_0_0_1px_rgb(43,43,181),0_0_0_3px_rgb(220,220,248)]";
 const BTN = "h-9 rounded-lg px-3.5 text-sm font-semibold";
 
-// The type of a deliverable, as a pill select.
+// The type of a deliverable, as a pill select. The browser's own arrow sat hard
+// against the right edge, so it is replaced with one drawn inside the pill.
 export function KindSelect({ value, onChange, kinds }) {
   return (
-    <select
-      aria-label="Deliverable type"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`${PILL} min-w-[180px]`}
-    >
-      {kinds.map((t) => (
-        <option key={t} value={t}>
-          {t}
-        </option>
-      ))}
-    </select>
+    <span className="relative inline-flex min-w-[180px]">
+      <select
+        aria-label="Deliverable type"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${PILL} w-full cursor-pointer appearance-none pr-10`}
+      >
+        {kinds.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        aria-hidden="true"
+        className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[rgb(84,100,144)]"
+      />
+    </span>
   );
 }
 
