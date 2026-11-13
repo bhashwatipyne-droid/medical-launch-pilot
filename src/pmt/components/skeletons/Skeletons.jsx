@@ -232,6 +232,55 @@ export const ApprovalsBoardSkeleton = () => (
   </SkeletonScreen>
 );
 
+// Approvals: the queue list and the detail pane, each shaped like the real
+// thing (same row padding, same detail column) so nothing moves on arrival.
+export const ApprovalsListSkeleton = ({ rows = 6 }) => (
+  <SkeletonScreen label="Loading approvals" testId="approvals-loading-state">
+    {Array.from({ length: rows }, (_, i) => (
+      <div key={i} className="flex items-start gap-2.5 border-b border-slate-100 px-4 py-3">
+        <Bone className="mt-0.5 h-4 w-4 rounded" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-end">
+            <Bone className="h-5 w-20 rounded-full" />
+          </div>
+          <Bone className={cn("mt-2 h-4", i % 2 ? "w-2/3" : "w-3/4")} />
+          <Bone className="mt-2 h-3 w-1/2" />
+        </div>
+      </div>
+    ))}
+  </SkeletonScreen>
+);
+
+export const ApprovalsDetailSkeleton = () => (
+  <SkeletonScreen label="Loading approval" className="max-w-[720px] px-4 pb-10 pt-4 md:px-7 md:pt-6">
+    <Bone className="h-6 w-28 rounded-full" />
+    <Bone className="mt-3 h-6 w-64" />
+    <div className="mt-5 grid grid-cols-[92px_1fr] gap-y-3 md:grid-cols-[130px_1fr]">
+      {Array.from({ length: 4 }, (_, i) => (
+        <div key={i} className="contents">
+          <Bone className="h-4 w-16" />
+          <Bone className={cn("h-4", i === 3 ? "w-full max-w-[420px]" : "w-40")} />
+        </div>
+      ))}
+    </div>
+    <div className="mt-6">
+      <Bone className="mb-2.5 h-4 w-32" />
+      <div className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-[rgb(234,238,244)] sm:grid-cols-2">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className={cn("bg-white px-3 py-2.5", i === 0 && "sm:col-span-2")}>
+            <Bone className="h-3 w-20" />
+            <Bone className="mt-2 h-4 w-3/4" />
+          </div>
+        ))}
+      </div>
+    </div>
+    <div className="mt-5 flex gap-2">
+      <Bone className="h-9 w-24 rounded-lg" />
+      <Bone className="h-9 w-24 rounded-lg" />
+    </div>
+  </SkeletonScreen>
+);
+
 export const EfficiencyContentSkeleton = () => (
   <SkeletonScreen label="Loading efficiency" testId="efficiency-loading-state">
     <div className="flex flex-col gap-5">

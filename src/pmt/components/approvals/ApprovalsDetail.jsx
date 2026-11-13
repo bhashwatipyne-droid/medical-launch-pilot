@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LaunchFacts } from "@/components/launch/LaunchFacts";
+import { ApprovalDetailsEditor } from "@/components/approvals/ApprovalDetailsEditor";
+import { ApprovalsDetailSkeleton } from "@/components/skeletons/Skeletons";
 import { CEO_GATES, STAGES, STAGE_LABEL, STAGE_TO_DEPARTMENT } from "@/lib/launchFlow";
 import { fmtDayMonth } from "@/lib/stagePlan";
 
@@ -104,14 +106,16 @@ function SentBackNotice({ item }) {
 }
 
 export function ApprovalsDetail(ctx) {
-  const { aSel, canAct: canActOnQueue, decide, detailOpen, handleMove, loading, movingId, notes, sendBack, setDetailOpen, setNotes } = ctx;
+  const { aSel, canAct: canActOnQueue, currentUserId, decide, detailOpen, handleMove, loading, movingId, notes, refreshBoard, sendBack, setDetailOpen, setNotes } = ctx;
   const sentBack = isSentBack(aSel);
   const canAct = canActOnQueue && !sentBack;
   return (
     <>
     {/* DETAIL */}
     <div className={`flex-1 overflow-y-auto ${detailOpen ? "" : "max-md:hidden"}`}>
-      {aSel ? (
+      {loading ? (
+        <ApprovalsDetailSkeleton />
+      ) : aSel ? (
         <div className="max-w-[720px] px-4 pb-10 pt-4 md:px-7 md:pt-6">
           <button
             type="button"
@@ -198,7 +202,11 @@ export function ApprovalsDetail(ctx) {
           </div>
 
           <div className="mt-6">
-            <LaunchFacts stage={aSel.current_stage} launch={aSel.launch || {}} />
+            {sentBack ? (
+              <LaunchFacts stage={aSel.current_stage} launch={aSel.launch || {}} />
+            ) : (
+              <ApprovalDetailsEditor item={aSel} canEdit={canAct} currentUserId={currentUserId} onSaved={refreshBoard} />
+            )}
           </div>
 
           {aSel.comments && (
@@ -254,11 +262,9 @@ export function ApprovalsDetail(ctx) {
           )}
         </div>
       ) : (
-        !loading && (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Select an approval to review it
-          </div>
-        )
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          Select an approval to review it
+        </div>
       )}
     </div>
     </>

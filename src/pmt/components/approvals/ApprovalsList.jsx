@@ -1,5 +1,6 @@
 import { APPROVALS } from "@/constants/testIds";
 import { ApprovalRow } from "@/components/approvals/ApprovalRow";
+import { ApprovalsListSkeleton } from "@/components/skeletons/Skeletons";
 import { QUEUE_MOVES_ENABLED, SENT_BACK } from "@/components/approvals/approvalsView";
 
 export function ApprovalsList(ctx) {
@@ -29,7 +30,7 @@ export function ApprovalsList(ctx) {
 
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="p-4 text-sm text-muted-foreground">Loading…</div>
+          <ApprovalsListSkeleton />
         ) : aList.length === 0 ? (
           <div
             data-testid={APPROVALS.emptyState}

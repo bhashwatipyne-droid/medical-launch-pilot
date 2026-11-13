@@ -40,12 +40,22 @@ await denied(as('prmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief:
 await denied(as('pmem')('PATCH', `/deliverables/${lead.id}`, { current_stage: 'Production' }))
 await denied(as('pmem')('PATCH', `/deliverables/${lead.id}`, { stage_status: 'Completed' }))
 await as('pmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief: 'Fingertip SpO2 monitor' }, stage_status: 'Ready for Review' })
-await denied(as('pmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief: 'edit while waiting' } }))
+// details stay editable while waiting; status and plan changes do not
+await as('pm')('GET', '/approvals/board') // opens the review
+await as('pmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief: 'Fingertip SpO2 monitor v2' } })
+await denied(as('pmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief: 'x' }, stage_status: 'In Progress', current_stage: 'Costing' }))
+await denied(as('prmem')('PATCH', `/deliverables/${lead.id}`, { launch: { brief: 'other team' } }))
 
 // 3. review: the board opens a manager item; only Product's manager (or CEO) approves
 let board = await as('pm')('GET', '/approvals/board')
 const item = board.MANAGER.find((i) => i.deliverable_id === lead.id)
 assert.ok(item, 'manager approval opened')
+assert.equal(item.launch.brief, 'Fingertip SpO2 monitor v2', 'approver sees the edited brief')
+assert.match(item.last_edit.what, /Product brief/, 'edit is logged against the approval')
+// the approver can fix details too, and it is logged
+await as('pm')('PATCH', `/deliverables/${lead.id}`, { launch: { ...item.launch, spec_link: 'https://spec.example/x' } })
+board = await as('pm')('GET', '/approvals/board')
+assert.equal(board.MANAGER.find((i) => i.deliverable_id === lead.id).launch.spec_link, 'https://spec.example/x')
 await denied(as('pmem')('POST', `/approval-items/${item.id}/approve`, {}))
 await denied(as('prm')('POST', `/approval-items/${item.id}/approve`, {}))
 await as('pm')('POST', `/approval-items/${item.id}/approve`, { note: 'ok' })
@@ -92,6 +102,7 @@ assert.equal(after.length, 4)
 
 // 8. a removed person is locked out
 await query(`update ml_ws_records set data = data || '{"removed": true, "active": false}' where id = $1`, [U.pmem[0]])
+await new Promise((r) => setTimeout(r, 15100)) // a hand edit shows once the held copy expires
 await assert.rejects(as('pmem')('GET', '/auth/me'), (e) => e.status === 401)
 
 console.log('FLOW PASSED')

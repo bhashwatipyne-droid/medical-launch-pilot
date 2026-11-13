@@ -1,4 +1,4 @@
-import { CEO_GATES, STAGES as LAUNCH_STAGES, STAGE_LABEL, TEAMS as LAUNCH_TEAMS, isGateStage, isOwnStage } from "@/lib/launchFlow";
+import { CEO_GATES, FIELD_BY_KEY, STAGES as LAUNCH_STAGES, STAGE_LABEL, TEAMS as LAUNCH_TEAMS, isGateStage, isOwnStage } from "@/lib/launchFlow";
 // The demo's stand-in for the FastAPI backend: the same routes and response
 // shapes, answered from a sample workspace held in memory. Edits made while
 // clicking around are kept until the page is reloaded, then the demo starts
@@ -95,7 +95,7 @@ const hydrateProject = (project, { withDeliverables = true } = {}) => {
   mine.forEach((d) => {
     stageCounts[d.current_stage] = (stageCounts[d.current_stage] || 0) + 1;
   });
-  const poc = (client?.contact_persons || []).find((c) => c.id === project.poc_id);
+  const poc = (client?.contact_persons || []).find((c) => c.id === project.poc_id) || db().users.find((u) => u.id === project.poc_id);
   return {
     ...project,
     deliverables: withDeliverables ? clone(mine) : [],
@@ -353,6 +353,14 @@ const sendBackDeliverable = (deliverable, toStage, note, user) => {
 };
 
 // ---------------------------------------------------------------- approvals
+// The newest change made to this stage's details after it was sent for approval.
+const lastEditOf = (d, since = "") => {
+  const h = [...db().approvalHistory].reverse().find((x) => x.deliverable_id === d.id && x.action === "EDITED" && x.old_value === d.current_stage && String(x.created_at) >= String(since));
+  if (!h) return null;
+  const by = db().users.find((u) => u.id === h.performed_by) || {};
+  return { by: by.name || "Someone", at: h.created_at, what: h.comment };
+};
+
 const hydrateApproval = (item) => {
   const d = db().deliverables.find((x) => x.id === item.deliverable_id) || {};
   const p = db().projects.find((x) => x.id === d.project_id) || {};
@@ -374,6 +382,7 @@ const hydrateApproval = (item) => {
     client_name: c.name || "",
     // PROTOTYPE: what the approver needs to see.
     launch: d.launch || {},
+    last_edit: item.approval_type === "SENT_BACK" ? null : lastEditOf(d, item.created_at),
     gate: CEO_GATES[d.current_stage] || null,
   };
 };
@@ -1025,7 +1034,7 @@ const efficiencyTrend = (month, months = 6) =>
 const CATEGORY_OF_STAGE = {};
 const invoiceMeta = (p) => {
   const client = db().clients.find((c) => c.id === p.client_id) || {};
-  const poc = (client.contact_persons || []).find((c) => c.id === p.poc_id);
+  const poc = (client.contact_persons || []).find((c) => c.id === p.poc_id) || db().users.find((u) => u.id === p.poc_id);
   const changed = p.status_changed_at || p.updated_at;
   return {
     id: p.id,
@@ -1509,7 +1518,35 @@ const ROUTES = [
       const extra = Object.keys(body).filter((k) => !["launch", "stage_status"].includes(k));
       guard(extra.length === 0, "Only the CEO or the Product manager can change that");
       guard(!body.stage_status || ["Ready for Review", "In Progress"].includes(body.stage_status), "Only the CEO or the Product manager can change that");
-      guard(["Not Started", "In Progress", "Changes Requested"].includes(d.stage_status), "This stage is waiting for approval or finished, so it cannot be changed");
+      // The details stay editable while the stage waits for approval (fix a
+      // link, add a note) - only the finished flow is locked.
+      const detailsOnly = Object.keys(body).every((k) => k === "launch");
+      guard(
+        ["Not Started", "In Progress", "Changes Requested"].includes(d.stage_status) ||
+          (detailsOnly && d.stage_status === "Ready for Review"),
+        "This launch is finished, so it cannot be changed"
+      );
+    }
+    // An edit made while the stage waits for approval is written to the
+    // approval log, and the approvers are told, so nobody signs off on what
+    // they read before the change.
+    if (body.launch && d.stage_status === "Ready for Review") {
+      const before = d.launch || {};
+      const changed = Object.keys(body.launch).filter((k) => String(body.launch[k] ?? "") !== String(before[k] ?? ""));
+      if (changed.length) {
+        const me = actingUser();
+        const labels = changed.map((k) => FIELD_BY_KEY[k]?.label || k).join(", ");
+        db().approvalHistory.push({
+          id: newId("ah"), deliverable_id: d.id, action: "EDITED", performed_by: me.id,
+          comment: `Changed: ${labels}`, old_value: d.current_stage, new_value: null, created_at: nowIso(),
+        });
+        notify(
+          managersOf(d.current_stage).filter((id) => id !== me.id),
+          `${d.current_stage} details changed`,
+          `${me.name} changed ${labels} on ${d.name} while it waits for your approval.`,
+          d
+        );
+      }
     }
     Object.entries(body).forEach(([k, v]) => {
       if (v !== undefined && v !== null) d[k] = v;
